@@ -1,0 +1,744 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau Solver</title>
+<style>
+  :root{
+    --felt-dark:#0a2e22;
+    --felt:#0f3d2e;
+    --felt-light:#155038;
+    --card-face:#f6f1e4;
+    --ink:#1c1a15;
+    --gold:#c9a13b;
+    --gold-dim:#8a7130;
+    --red:#a8323a;
+    --muted:#a9c2b4;
+    --danger:#c95b3b;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--felt-dark);color:var(--card-face);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, var(--felt-light), var(--felt) 60%, var(--felt-dark) 100%);
+    min-height:100vh;
+    padding:20px 14px 60px;
+  }
+  h1{
+    font-family:Georgia,"Times New Roman",serif;
+    font-weight:700;
+    font-size:26px;
+    letter-spacing:0.3px;
+    margin:0 0 2px;
+    color:var(--card-face);
+    text-align:center;
+  }
+  .subtitle{
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+    margin:0 0 22px;
+    letter-spacing:0.4px;
+  }
+  .wrap{max-width:920px;margin:0 auto;}
+
+  .panel{
+    background:rgba(10,25,19,0.55);
+    border:1px solid rgba(201,161,59,0.25);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:16px;
+    box-shadow:inset 0 0 40px rgba(0,0,0,0.25);
+  }
+  .panel-title{
+    font-family:Georgia,serif;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:1.6px;
+    color:var(--gold);
+    margin:0 0 10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .burn-toggle{
+    font-size:11px;
+    text-transform:none;
+    letter-spacing:0.2px;
+    color:var(--muted);
+    display:flex;
+    align-items:center;
+    gap:6px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .burn-toggle input{accent-color:var(--gold);}
+
+  /* --- card visuals --- */
+  .card{
+    width:46px;height:64px;
+    background:var(--card-face);
+    border-radius:6px;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    font-family:Georgia,serif;
+    font-weight:700;
+    font-size:16px;
+    color:var(--ink);
+    position:relative;
+    box-shadow:0 2px 4px rgba(0,0,0,0.4);
+    flex-shrink:0;
+  }
+  .card.red{color:var(--red);}
+  .card .suit{font-size:14px;margin-top:2px;}
+  .card .rm{
+    position:absolute;top:-6px;right:-6px;
+    width:18px;height:18px;border-radius:50%;
+    background:var(--danger);color:#fff;font-size:12px;line-height:18px;
+    text-align:center;cursor:pointer;border:2px solid var(--felt-dark);
+  }
+  .slot-empty{
+    width:46px;height:64px;
+    border:1.5px dashed rgba(201,161,59,0.4);
+    border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    color:rgba(201,161,59,0.6);
+    font-size:20px;cursor:pointer;
+    flex-shrink:0;
+    transition:background .15s;
+  }
+  .slot-empty:hover{background:rgba(201,161,59,0.1);}
+
+  .hand-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+
+  .table-columns{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+  }
+  @media (max-width:560px){ .table-columns{grid-template-columns:repeat(2,1fr);} }
+  .column-strip{
+    background:rgba(0,0,0,0.15);
+    border-radius:8px;
+    padding:8px 5px;
+    display:flex;flex-direction:column;
+  }
+  .strip-half{display:flex;flex-direction:column;gap:5px;min-height:182px;}
+  .strip-half.opp{justify-content:flex-end;}   /* opponent's cards hug the divider from above */
+  .strip-half.root{justify-content:flex-start;} /* your cards hug the divider from below */
+  .strip-divider{
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    padding:5px 0;margin:2px 0;
+    border-top:1px solid rgba(201,161,59,0.35);
+    border-bottom:1px solid rgba(201,161,59,0.35);
+  }
+  .strip-divider .col-num{
+    font-family:Georgia,serif;font-size:12px;color:var(--gold);letter-spacing:0.5px;
+  }
+  .strip-count{font-size:9px;color:var(--muted);letter-spacing:0.5px;}
+  .column-strip .card, .column-strip .slot-empty{width:100%;height:32px;font-size:12px;flex-direction:row;gap:4px;}
+  .column-strip .card .suit{margin:0;font-size:12px;}
+  .column-strip .card .rm{top:-5px;right:-5px;width:16px;height:16px;font-size:10px;line-height:16px;}
+  .side-caption{font-family:Georgia,serif;font-size:11px;color:var(--muted);text-align:center;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:3px;}
+
+  /* --- controls --- */
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;}
+  select,button{
+    font-family:inherit;font-size:14px;
+    border-radius:8px;border:1px solid rgba(201,161,59,0.4);
+    padding:9px 14px;
+    background:rgba(255,255,255,0.06);
+    color:var(--card-face);
+  }
+  button.primary{
+    background:var(--gold);color:var(--ink);font-weight:700;
+    border:none;cursor:pointer;letter-spacing:0.3px;
+  }
+  button.primary:disabled{opacity:0.5;cursor:not-allowed;}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.15);cursor:pointer;}
+
+  .status{text-align:center;color:var(--muted);font-size:13px;margin-top:10px;min-height:18px;}
+  .warn{color:var(--danger);}
+
+  /* --- results --- */
+  .result-row{
+    display:flex;align-items:center;gap:10px;
+    padding:8px 4px;border-bottom:1px solid rgba(255,255,255,0.06);
+  }
+  .result-row:first-child{
+    background:rgba(201,161,59,0.12);
+    border-radius:8px;border-bottom:none;
+    padding:10px 8px;
+  }
+  .result-rank{width:22px;color:var(--muted);font-size:12px;font-family:ui-monospace,monospace;}
+  .result-move{flex:1;font-size:14px;}
+  .result-move b{color:var(--gold);}
+  .bar-wrap{width:110px;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;}
+  .bar{height:100%;background:linear-gradient(90deg,var(--gold-dim),var(--gold));}
+  .result-pct{width:46px;text-align:right;font-family:ui-monospace,monospace;font-size:13px;color:var(--muted);}
+
+  /* --- picker modal --- */
+  .modal-bg{
+    position:fixed;inset:0;background:rgba(0,0,0,0.6);
+    display:none;align-items:flex-end;justify-content:center;z-index:50;
+  }
+  .modal-bg.open{display:flex;}
+  .picker{
+    background:var(--felt);
+    border-top:2px solid var(--gold);
+    border-radius:16px 16px 0 0;
+    padding:16px;
+    width:100%;max-width:520px;
+    max-height:70vh;overflow-y:auto;
+  }
+  @media (min-width:640px){
+    .modal-bg{align-items:center;}
+    .picker{border-radius:16px;border:2px solid var(--gold);}
+  }
+  .picker-title{font-family:Georgia,serif;color:var(--gold);font-size:14px;margin-bottom:10px;text-align:center;}
+  .picker-grid{display:grid;grid-template-columns:repeat(13,1fr);gap:4px;}
+  .picker-card{
+    aspect-ratio:1/1.15;border-radius:4px;background:var(--card-face);color:var(--ink);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+    font-size:11px;font-weight:700;font-family:Georgia,serif;cursor:pointer;border:none;
+  }
+  .picker-card.red{color:var(--red);}
+  .picker-card:disabled{opacity:0.15;cursor:not-allowed;}
+  .picker-close{display:block;margin:14px auto 0;}
+
+  footer{text-align:center;color:var(--muted);font-size:11px;margin-top:24px;opacity:0.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Tableau Solver</h1>
+  <p class="subtitle">Build the board, then let a Monte Carlo tree search find your best move.</p>
+
+  <!-- YOUR HAND -->
+  <div class="panel">
+    <div class="panel-title">
+      <span>Your Hand (6 -- you draw before you decide)</span>
+      <label class="burn-toggle"><input type="checkbox" id="rootBurnToggle"> I've used my burn</label>
+    </div>
+    <div class="hand-row" id="handRow"></div>
+  </div>
+
+  <!-- TABLES -->
+  <div class="panel">
+    <div class="panel-title">
+      <span>Table Columns</span>
+      <label class="burn-toggle"><input type="checkbox" id="oppBurnToggle"> Opponent has burned</label>
+    </div>
+    <div class="side-caption">Opponent</div>
+    <div class="table-columns" id="tableColumnsGrid"></div>
+    <div class="side-caption" style="margin-top:4px;">You</div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="panel">
+    <div class="controls">
+      <label style="font-size:13px;color:var(--muted);">Search time
+        <select id="timeBudget">
+          <option value="2000">2s (quick)</option>
+          <option value="5000" selected>5s (recommended)</option>
+          <option value="10000">10s (deeper)</option>
+          <option value="20000">20s (thorough)</option>
+        </select>
+      </label>
+      <button class="primary" id="solveBtn">Find best move</button>
+      <button class="ghost" id="clearBtn">Clear board</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="panel" id="resultsPanel" style="display:none;">
+    <div class="panel-title"><span>Recommended moves</span></div>
+    <div id="resultsList"></div>
+  </div>
+
+  <footer>Ranks 2–10, J, Q, K, A · ♠ ♣ black · ♥ ♦ red · runs entirely in your browser</footer>
+</div>
+
+<!-- CARD PICKER MODAL -->
+<div class="modal-bg" id="modalBg">
+  <div class="picker">
+    <div class="picker-title" id="pickerTitle">Choose a card</div>
+    <div class="picker-grid" id="pickerGrid"></div>
+    <button class="ghost picker-close" id="pickerClose">Cancel</button>
+  </div>
+</div>
+
+<script>
+// =========================================================================
+// GAME STATE (UI-side)
+// =========================================================================
+const SUITS = ['s','h','d','c'];
+const SUIT_SYMBOL = {s:'♠', h:'♥', d:'♦', c:'♣'};
+const RED_SUITS = new Set(['h','d']);
+const RANK_LABEL = r => ({11:'J',12:'Q',13:'K',14:'A'}[r] || String(r));
+
+let rootHand = [];
+let rootTable = [[],[],[],[]];
+let oppTable = [[],[],[],[]];
+let rootBurned = false;
+let oppBurned = false;
+
+function cardKeyUI(c){ return c.r+'-'+c.s; }
+function usedCardKeys(){
+  const s = new Set();
+  rootHand.forEach(c=>s.add(cardKeyUI(c)));
+  rootTable.forEach(col=>col.forEach(c=>s.add(cardKeyUI(c))));
+  oppTable.forEach(col=>col.forEach(c=>s.add(cardKeyUI(c))));
+  return s;
+}
+
+// =========================================================================
+// RENDERING
+// =========================================================================
+function cardEl(c, onRemove){
+  const div = document.createElement('div');
+  div.className = 'card' + (RED_SUITS.has(SUITS[c.s]) ? ' red' : '');
+  div.innerHTML = `<div>${RANK_LABEL(c.r)}</div><div class="suit">${SUIT_SYMBOL[SUITS[c.s]]}</div>`;
+  if (onRemove){
+    const rm = document.createElement('div');
+    rm.className='rm'; rm.textContent='×';
+    rm.onclick = (e)=>{ e.stopPropagation(); onRemove(); };
+    div.appendChild(rm);
+  }
+  return div;
+}
+function emptySlotEl(onClick){
+  const div = document.createElement('div');
+  div.className='slot-empty';
+  div.textContent='+';
+  div.onclick = onClick;
+  return div;
+}
+
+function renderHand(){
+  const row = document.getElementById('handRow');
+  row.innerHTML='';
+  for (let i=0;i<6;i++){
+    if (rootHand[i]){
+      row.appendChild(cardEl(rootHand[i], ()=>{ rootHand.splice(i,1); renderAll(); }));
+    } else {
+      row.appendChild(emptySlotEl(()=> openPicker('Add to your hand', c=>{ rootHand.push(c); renderAll(); })));
+    }
+  }
+}
+function renderColumns(){
+  const grid = document.getElementById('tableColumnsGrid');
+  grid.innerHTML='';
+  for (let i=0;i<4;i++){
+    const strip = document.createElement('div');
+    strip.className='column-strip';
+
+    // Opponent half: oldest card at the outer edge, newest (and the "+" add
+    // slot) hugging the divider from above.
+    const oppHalf = document.createElement('div');
+    oppHalf.className='strip-half opp';
+    oppTable[i].forEach((c,j)=>{
+      oppHalf.appendChild(cardEl(c, ()=>{ oppTable[i].splice(j,1); renderAll(); }));
+    });
+    if (oppTable[i].length<5){
+      oppHalf.appendChild(emptySlotEl(()=> openPicker(`Add to opponent Col ${i+1}`, c=>{ oppTable[i].push(c); renderAll(); })));
+    }
+
+    // Divider with the column number.
+    const divider = document.createElement('div');
+    divider.className='strip-divider';
+    divider.innerHTML = `<span class="col-num">Col ${i+1}</span><span class="strip-count">${oppTable[i].length}v${rootTable[i].length}</span>`;
+
+    // Your half: the "+" add slot hugs the divider from below (mirrors the
+    // opponent), older cards fall away toward the outer edge.
+    const rootHalf = document.createElement('div');
+    rootHalf.className='strip-half root';
+    if (rootTable[i].length<5){
+      rootHalf.appendChild(emptySlotEl(()=> openPicker(`Add to your Col ${i+1}`, c=>{ rootTable[i].push(c); renderAll(); })));
+    }
+    for (let j=rootTable[i].length-1;j>=0;j--){
+      const jj=j;
+      rootHalf.appendChild(cardEl(rootTable[i][jj], ()=>{ rootTable[i].splice(jj,1); renderAll(); }));
+    }
+
+    strip.appendChild(oppHalf);
+    strip.appendChild(divider);
+    strip.appendChild(rootHalf);
+    grid.appendChild(strip);
+  }
+}
+function renderAll(){
+  renderHand();
+  renderColumns();
+  document.getElementById('rootBurnToggle').checked = rootBurned;
+  document.getElementById('oppBurnToggle').checked = oppBurned;
+  document.getElementById('resultsPanel').style.display='none';
+  validateStatus();
+}
+document.getElementById('rootBurnToggle').onchange = e=>{ rootBurned = e.target.checked; };
+document.getElementById('oppBurnToggle').onchange = e=>{ oppBurned = e.target.checked; };
+document.getElementById('clearBtn').onclick = ()=>{
+  rootHand=[]; rootTable=[[],[],[],[]]; oppTable=[[],[],[],[]];
+  rootBurned=false; oppBurned=false; renderAll();
+};
+
+function validateStatus(){
+  const status = document.getElementById('status');
+  const btn = document.getElementById('solveBtn');
+  if (rootHand.length !== 6){
+    status.innerHTML = `<span class="warn">Your hand needs exactly 6 cards -- you draw before deciding, so it should already include this turn's draw (currently ${rootHand.length}).</span>`;
+    btn.disabled = true;
+  } else {
+    status.textContent = '';
+    btn.disabled = false;
+  }
+}
+
+// =========================================================================
+// CARD PICKER
+// =========================================================================
+let pickerCallback = null;
+function openPicker(title, onChoose){
+  pickerCallback = onChoose;
+  document.getElementById('pickerTitle').textContent = title;
+  const grid = document.getElementById('pickerGrid');
+  grid.innerHTML='';
+  const used = usedCardKeys();
+  for (const s of [0,1,2,3]){
+    for (let r=2;r<=14;r++){
+      const key = r+'-'+s;
+      const btn = document.createElement('button');
+      btn.className = 'picker-card' + (RED_SUITS.has(SUITS[s]) ? ' red' : '');
+      btn.innerHTML = `<div>${RANK_LABEL(r)}</div><div>${SUIT_SYMBOL[SUITS[s]]}</div>`;
+      if (used.has(key)){ btn.disabled = true; }
+      else {
+        btn.onclick = ()=>{
+          closePicker();
+          pickerCallback({r, s});
+        };
+      }
+      grid.appendChild(btn);
+    }
+  }
+  document.getElementById('modalBg').classList.add('open');
+}
+function closePicker(){ document.getElementById('modalBg').classList.remove('open'); }
+document.getElementById('pickerClose').onclick = closePicker;
+document.getElementById('modalBg').onclick = (e)=>{ if (e.target.id==='modalBg') closePicker(); };
+
+// =========================================================================
+// SOLVER ENGINE (ISMCTS / PIMC — ported from the Python reference solver)
+// =========================================================================
+function handRank(cards) {
+  const ranks = cards.map(c => c.r).sort((a,b)=>b-a);
+  const suits = cards.map(c => c.s);
+  const n = cards.length;
+  const rankCounts = {};
+  for (const r of ranks) rankCounts[r] = (rankCounts[r]||0)+1;
+  const counts = Object.entries(rankCounts).map(([r,c])=>[+r,c]).sort((a,b)=> b[1]-a[1] || b[0]-a[0]);
+  const isFlush = n===5 && new Set(suits).size===1;
+  const uniq = [...new Set(ranks)].sort((a,b)=>b-a);
+  let isStraight=false, straightHigh=null;
+  if (n===5 && uniq.length===5) {
+    if (uniq[0]-uniq[4]===4) { isStraight=true; straightHigh=uniq[0]; }
+    else if (uniq.join(',')==='14,5,4,3,2') { isStraight=true; straightHigh=5; }
+  }
+  if (n<5) {
+    let cat=0;
+    if (counts[0][1]===4) cat=7;
+    else if (counts[0][1]===3) cat=3;
+    else if (counts[0][1]===2 && counts.length>1 && counts[1][1]===2) cat=2;
+    else if (counts[0][1]===2) cat=1;
+    return [cat, counts.map(c=>c[0]).concat(ranks)];
+  }
+  if (isStraight && isFlush) return [8, [straightHigh]];
+  if (counts[0][1]===4) { const kicker = Math.max(...ranks.filter(r=>r!==counts[0][0])); return [7, [counts[0][0], kicker]]; }
+  if (counts[0][1]===3 && counts[1][1]===2) return [6, [counts[0][0], counts[1][0]]];
+  if (isFlush) return [5, ranks];
+  if (isStraight) return [4, [straightHigh]];
+  if (counts[0][1]===3) { const kickers = ranks.filter(r=>r!==counts[0][0]).sort((a,b)=>b-a); return [3, [counts[0][0], ...kickers]]; }
+  if (counts[0][1]===2 && counts[1][1]===2) {
+    const pairRanks = [counts[0][0], counts[1][0]].sort((a,b)=>b-a);
+    const kicker = Math.max(...ranks.filter(r=>!pairRanks.includes(r)));
+    return [2, [...pairRanks, kicker]];
+  }
+  if (counts[0][1]===2) { const kickers = ranks.filter(r=>r!==counts[0][0]).sort((a,b)=>b-a); return [1, [counts[0][0], ...kickers]]; }
+  return [0, ranks];
+}
+function cmpRank(a,b){
+  const [ca,ta]=a, [cb,tb]=b;
+  if (ca!==cb) return ca-cb;
+  const len=Math.max(ta.length,tb.length);
+  for (let i=0;i<len;i++){ const x=ta[i]??-1, y=tb[i]??-1; if (x!==y) return x-y; }
+  return 0;
+}
+function makeDeck(){ const d=[]; for (let r=2;r<=14;r++) for (let s=0;s<4;s++) d.push({r,s}); return d; }
+const _FULL_DECK = makeDeck();  // precomputed once
+function partialStrength(cards){
+  // fast category-only (0-7), no full hand_rank needed for this heuristic signal
+  if (!cards.length) return -1;
+  const counts = {};
+  for (const c of cards) counts[c.r] = (counts[c.r]||0)+1;
+  const vals = Object.values(counts).sort((a,b)=>b-a);
+  if (vals[0]===4) return 7;
+  if (vals[0]===3) return 3;
+  if (vals[0]===2 && vals.length>1 && vals[1]===2) return 2;
+  if (vals[0]===2) return 1;
+  return 0;
+}
+function fitScore(card, slotCards, rankW=12, suitW=1, straightW=0.5, highW=0.05){
+  if (slotCards.length>=5) return -999;
+  const ranksIn = slotCards.map(c=>c.r), suitsIn = slotCards.map(c=>c.s);
+  const rc={}, sc={};
+  for (const r of ranksIn) rc[r]=(rc[r]||0)+1;
+  for (const s of suitsIn) sc[s]=(sc[s]||0)+1;
+  let score = (rc[card.r]||0)*rankW + (sc[card.s]||0)*suitW;
+  if (slotCards.length){ const mind = Math.min(...ranksIn.map(x=>Math.abs(card.r-x))); if (mind<=4) score += Math.max(0,5-mind)*straightW; }
+  score += card.r*highW;
+  return score;
+}
+function ck(c){ return c.r+'-'+c.s; }
+function heuristicAction(hand, ownTable, oppTableS, burned){
+  const openSlots=[0,1,2,3].filter(i=>ownTable[i].length<5);
+  if (!openSlots.length) return {type:'burn', card:hand[0]};
+  const playsMade = ownTable.reduce((a,s)=>a+s.length,0);
+  const empties = [0,1,2,3].filter(i=>ownTable[i].length===0);
+  if (playsMade<4 && empties.length){
+    const c = hand.reduce((m,c)=> c.r<m.r?c:m);
+    return {type:'play', card:c, slot:empties[0]};
+  }
+  // opponent's partial strength per slot only depends on the slot, not on
+  // which of our hand cards we're scoring -- compute it once, not once
+  // per (card, slot) pair.
+  const weakBonusBySlot = {};
+  for (const i of openSlots) weakBonusBySlot[i] = -partialStrength(oppTableS[i])*3;
+  const best={};
+  for (const c of hand){
+    let scored = openSlots.map(i=> [fitScore(c, ownTable[i]) + weakBonusBySlot[i], i]);
+    scored.sort((a,b)=>b[0]-a[0]);
+    best[ck(c)] = scored[0];
+  }
+  let bestCard = hand[0], bestVal=-Infinity;
+  for (const c of hand){ const [v]=best[ck(c)]; if (v>bestVal){bestVal=v;bestCard=c;} }
+  let worstCard = hand[0], worstVal=Infinity;
+  for (const c of hand){ const [v]=best[ck(c)]; if (v<worstVal){worstVal=v;worstCard=c;} }
+  const [val] = best[ck(bestCard)];
+  const [wval] = best[ck(worstCard)];
+  const [,slot] = best[ck(bestCard)];
+  if (!burned && wval<1.5 && val<1.5) return {type:'burn', card:worstCard};
+  return {type:'play', card:bestCard, slot};
+}
+function legalActions(state){
+  const p = state.toMove;
+  const hand = state.hands[p];
+  const openSlots = [0,1,2,3].filter(i=>state.tables[p][i].length<5);
+  const actions=[];
+  for (const c of hand) for (const s of openSlots) actions.push({type:'play', card:c, slot:s});
+  if (!state.burned[p]) for (const c of hand) actions.push({type:'burn', card:c});
+  return actions;
+}
+function actionKey(a){ return a.type==='burn' ? `burn:${ck(a.card)}` : `play:${ck(a.card)}:${a.slot}`; }
+function stepState(state, action){
+  // Current mover's hand was already at 6 (they drew before deciding).
+  // Structural sharing: only the cards/column that actually changed get
+  // new arrays -- everything untouched (the other player's whole table,
+  // the 3 unaffected columns) keeps the SAME array reference, and the
+  // deck is never copied at all (a fixed array + an advancing index).
+  const p = state.toMove;
+  const q = 1-p;
+  let hands = state.hands.slice();
+  let tables = state.tables;
+  let burned = state.burned;
+  if (action.type==='burn'){
+    hands[p] = state.hands[p].filter(c => !(c.r===action.card.r && c.s===action.card.s));
+    burned = p===0 ? [true, burned[1]] : [burned[0], true];
+  } else {
+    hands[p] = state.hands[p].filter(c => !(c.r===action.card.r && c.s===action.card.s));
+    const cols = state.tables[p].slice();
+    cols[action.slot] = [...state.tables[p][action.slot], action.card];
+    tables = p===0 ? [cols, state.tables[1]] : [state.tables[0], cols];
+  }
+  let done, deckPos, toMove=q;
+  if (state.deckPos < state.deckCards.length){
+    hands[q] = [...state.hands[q], state.deckCards[state.deckPos]];
+    deckPos = state.deckPos + 1;
+    done = false;
+  } else {
+    hands[q] = state.hands[q];
+    deckPos = state.deckPos;
+    done = true;
+  }
+  return { hands, tables, burned, deckCards: state.deckCards, deckPos, toMove, done };
+}
+function isTerminal(state){ return state.done; }
+function evaluateTerminal(state, rootPlayer){
+  let wins=[0,0];
+  for (let i=0;i<4;i++){
+    const c = cmpRank(handRank(state.tables[0][i]), handRank(state.tables[1][i]));
+    if (c>0) wins[0]++; else if (c<0) wins[1]++;
+  }
+  const c = cmpRank(handRank(state.hands[0]), handRank(state.hands[1]));
+  if (c>0) wins[0]++; else if (c<0) wins[1]++;
+  let result = wins[0]>=3 ? 1 : (wins[1]>=3 ? -1 : 0);
+  return rootPlayer===0 ? result : -result;
+}
+function rollout(state){
+  let s = state;
+  while (!isTerminal(s)){
+    const p = s.toMove;
+    const a = heuristicAction(s.hands[p], s.tables[p], s.tables[1-p], s.burned[p]);
+    s = stepState(s, a);
+  }
+  return s;
+}
+function shuffle(arr, rng){ for (let i=arr.length-1;i>0;i--){ const j = Math.floor(rng()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+function makeRng(seed){ let x = seed || 123456789; return function(){ x ^= x<<13; x^=x>>>17; x^=x<<5; x|=0; return ((x>>>0) / 4294967296); }; }
+function determinize(rootHandS, rootTableS, oppTableS, rootBurnedS, oppBurnedS, rng){
+  const knownKeys = new Set();
+  for (const c of rootHandS) knownKeys.add(ck(c));
+  for (const col of rootTableS) for (const c of col) knownKeys.add(ck(c));
+  for (const col of oppTableS) for (const c of col) knownKeys.add(ck(c));
+  let unseen = _FULL_DECK.filter(c=>!knownKeys.has(ck(c)));
+  shuffle(unseen, rng);
+  let idx=0;
+  const oppHand = unseen.slice(idx, idx+5); idx+=5;
+  if (oppBurnedS) idx+=1;
+  const deckCards = unseen.slice(idx);
+  return {
+    hands: [rootHandS.map(c=>({...c})), oppHand],
+    tables: [rootTableS.map(col=>col.map(c=>({...c}))), oppTableS.map(col=>col.map(c=>({...c})))],
+    burned: [rootBurnedS, oppBurnedS],
+    deckCards, deckPos: 0, toMove: 0, done: false,
+  };
+}
+function actionPriority(action, hand, ownTable, oppTableS){
+  // Same progressive-bias idea as the Python solver: order untried actions
+  // so the tree expands (and therefore searches deeper on) the moves the
+  // heuristic already thinks are promising, instead of a random order.
+  if (action.type==='burn'){
+    const c = action.card;
+    let bestFit = 0, any=false;
+    for (let i=0;i<4;i++){ if (ownTable[i].length<5){ const f=fitScore(c, ownTable[i]); if (!any || f>bestFit){bestFit=f; any=true;} } }
+    return -bestFit;
+  }
+  const base = fitScore(action.card, ownTable[action.slot]);
+  const weakBonus = -partialStrength(oppTableS[action.slot]) * 3;
+  return base + weakBonus;
+}
+function newNode(state, parent, action){
+  const untried = isTerminal(state) ? [] : legalActions(state);
+  const p = state.toMove;
+  untried.sort((a,b)=> actionPriority(a, state.hands[p], state.tables[p], state.tables[1-p])
+                       - actionPriority(b, state.hands[p], state.tables[p], state.tables[1-p]));
+  return { state, parent, action, children: [], untried, visits:0, value:0, player: state.toMove };
+}
+function uctSelect(node, rootPlayer, c=1.4){
+  let best=null, bestScore=-Infinity;
+  for (const ch of node.children){
+    if (ch.visits===0) return ch;
+    let q = ch.value/ch.visits;
+    q = (node.player===rootPlayer) ? q : -q;
+    const score = q + c*Math.sqrt(Math.log(node.visits)/ch.visits);
+    if (score>bestScore){ bestScore=score; best=ch; }
+  }
+  return best;
+}
+function mctsSearch(rootState, rootPlayer, iterations, rng){
+  const root = newNode(rootState, null, null);
+  for (let it=0; it<iterations; it++){
+    let node = root;
+    while (node.untried.length===0 && node.children.length>0 && !isTerminal(node.state)){
+      node = uctSelect(node, rootPlayer);
+    }
+    if (node.untried.length>0 && !isTerminal(node.state)){
+      const a = node.untried.pop();  // highest-priority untried action (sorted ascending, pop takes the last)
+      const child = newNode(stepState(node.state, a), node, a);
+      node.children.push(child);
+      node = child;
+    }
+    const terminalState = isTerminal(node.state) ? node.state : rollout(node.state);
+    const result = evaluateTerminal(terminalState, rootPlayer);
+    let n = node;
+    while (n){ n.visits++; n.value += result; n = n.parent; }
+  }
+  const stats = new Map();
+  for (const ch of root.children) stats.set(actionKey(ch.action), [ch.visits, ch.value, ch.action]);
+  return stats;
+}
+async function solveBoard(rootHandS, rootTableS, oppTableS, rootBurnedS, oppBurnedS, timeBudgetMs, itersPerDet, onProgress){
+  const rng = makeRng(Date.now() % 2147483647);
+  const actionStats = new Map();
+  const start = Date.now();
+  let dets=0;
+  while (Date.now()-start < timeBudgetMs){
+    const det = determinize(rootHandS, rootTableS, oppTableS, rootBurnedS, oppBurnedS, rng);
+    const stats = mctsSearch(det, 0, itersPerDet, rng);
+    for (const [key,[v,val,action]] of stats){
+      if (!actionStats.has(key)) actionStats.set(key, [0,0,action]);
+      const e = actionStats.get(key);
+      e[0]+=v; e[1]+=val;
+    }
+    dets++;
+    if (onProgress) onProgress(dets, Date.now()-start);
+    await new Promise(r=>setTimeout(r,0)); // yield to keep the UI responsive
+  }
+  const ranked = [...actionStats.entries()].map(([key,[v,val,action]])=>{
+    const winRate = v>0 ? (val/v+1)/2 : 0.5;
+    return {action, winRate, visits:v};
+  });
+  ranked.sort((a,b)=>b.winRate-a.winRate);
+  return {ranked, dets, elapsed: Date.now()-start};
+}
+
+// =========================================================================
+// WIRE UP SOLVE BUTTON
+// =========================================================================
+function describeAction(a){
+  const label = RANK_LABEL(a.card.r) + SUIT_SYMBOL[SUITS[a.card.s]];
+  if (a.type==='burn') return `Burn <b>${label}</b>`;
+  return `Play <b>${label}</b> into your Column ${a.slot+1}`;
+}
+document.getElementById('solveBtn').onclick = async ()=>{
+  const btn = document.getElementById('solveBtn');
+  const status = document.getElementById('status');
+  const timeBudget = parseInt(document.getElementById('timeBudget').value, 10);
+  btn.disabled = true;
+  document.getElementById('resultsPanel').style.display='none';
+  const itersPerDet = 120;
+  const onProgress = (dets, ms)=>{ status.textContent = `Searching… ${dets} scenarios explored (${(ms/1000).toFixed(1)}s)`; };
+  status.textContent = 'Searching…';
+  await new Promise(r=>setTimeout(r,30)); // let the "Searching..." state paint first
+  try{
+    const {ranked, dets, elapsed} = await solveBoard(
+      rootHand, rootTable, oppTable, rootBurned, oppBurned, timeBudget, itersPerDet, onProgress
+    );
+    status.textContent = `Explored ${dets} hidden-card scenarios (~${dets*itersPerDet} search iterations) in ${(elapsed/1000).toFixed(1)}s`;
+    const list = document.getElementById('resultsList');
+    list.innerHTML='';
+    ranked.slice(0,6).forEach((r, idx)=>{
+      const row = document.createElement('div');
+      row.className='result-row';
+      row.innerHTML = `
+        <div class="result-rank">${idx+1}</div>
+        <div class="result-move">${describeAction(r.action)}</div>
+        <div class="bar-wrap"><div class="bar" style="width:${Math.round(r.winRate*100)}%"></div></div>
+        <div class="result-pct">${Math.round(r.winRate*100)}%</div>
+      `;
+      list.appendChild(row);
+    });
+    document.getElementById('resultsPanel').style.display='block';
+  } catch(err){
+    status.textContent = 'Something went wrong: ' + err.message;
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+renderAll();
+</script>
+</body>
+</html>

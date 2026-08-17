@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Play vs the Bot</title>
+<style>
+  :root{
+    --felt-dark:#0a2e22;
+    --felt:#0f3d2e;
+    --felt-light:#155038;
+    --card-face:#f6f1e4;
+    --card-back:#1c3a2e;
+    --ink:#1c1a15;
+    --gold:#c9a13b;
+    --gold-dim:#8a7130;
+    --red:#a8323a;
+    --muted:#a9c2b4;
+    --danger:#c95b3b;
+    --ok:#5a9c6e;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--felt-dark);color:var(--card-face);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, var(--felt-light), var(--felt) 60%, var(--felt-dark) 100%);
+    min-height:100vh; padding:16px 12px 60px;
+  }
+  .wrap{max-width:920px;margin:0 auto;}
+  h1{font-family:Georgia,serif;font-weight:700;font-size:24px;margin:0 0 2px;text-align:center;}
+  .subtitle{text-align:center;color:var(--muted);font-size:13px;margin:0 0 16px;}
+
+  .panel{
+    background:rgba(10,25,19,0.55);
+    border:1px solid rgba(201,161,59,0.25);
+    border-radius:14px; padding:14px; margin-bottom:14px;
+    box-shadow:inset 0 0 40px rgba(0,0,0,0.25);
+  }
+
+  .statusbar{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;justify-content:center;font-size:13px;color:var(--muted);}
+  .statusbar b{color:var(--card-face);}
+  .turn-pill{
+    display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;
+    font-family:Georgia,serif;font-size:13px;letter-spacing:0.4px;
+  }
+  .turn-pill.you{background:rgba(90,156,110,0.25);color:#8fd3a4;border:1px solid rgba(90,156,110,0.5);}
+  .turn-pill.bot{background:rgba(201,161,59,0.2);color:var(--gold);border:1px solid rgba(201,161,59,0.5);}
+  .turn-pill.over{background:rgba(255,255,255,0.08);color:var(--muted);border:1px solid rgba(255,255,255,0.15);}
+
+  .card{
+    width:46px;height:64px;background:var(--card-face);border-radius:6px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:Georgia,serif;font-weight:700;font-size:16px;color:var(--ink);
+    box-shadow:0 2px 4px rgba(0,0,0,0.4); flex-shrink:0; position:relative;
+    transition:transform .12s;
+  }
+  .card.red{color:var(--red);}
+  .card .suit{font-size:14px;margin-top:2px;}
+  .card.back{background:repeating-linear-gradient(45deg,var(--card-back),var(--card-back) 4px,#254a3a 4px,#254a3a 8px);border:1px solid rgba(201,161,59,0.3);}
+  .card.selectable{cursor:pointer;}
+  .card.selectable:hover{transform:translateY(-4px);}
+  .card.selected{transform:translateY(-8px);box-shadow:0 0 0 3px var(--gold), 0 4px 8px rgba(0,0,0,0.5);}
+  .card.justplayed{box-shadow:0 0 0 2px var(--ok);}
+
+  .hand-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;min-height:64px;}
+
+  .table-columns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  @media (max-width:560px){ .table-columns{grid-template-columns:repeat(2,1fr);} }
+  .column-strip{background:rgba(0,0,0,0.15);border-radius:8px;padding:8px 5px;display:flex;flex-direction:column;}
+  .strip-half{display:flex;flex-direction:column;gap:5px;min-height:110px;}
+  .strip-half.bot{justify-content:flex-end;}
+  .strip-half.you{justify-content:flex-start;}
+  .strip-divider{display:flex;align-items:center;justify-content:center;gap:6px;padding:5px 0;margin:2px 0;
+    border-top:1px solid rgba(201,161,59,0.35);border-bottom:1px solid rgba(201,161,59,0.35);}
+  .strip-divider .col-num{font-family:Georgia,serif;font-size:12px;color:var(--gold);}
+  .strip-count{font-size:9px;color:var(--muted);}
+  .column-strip .card{width:100%;height:32px;font-size:12px;flex-direction:row;gap:4px;}
+  .column-strip .card .suit{margin:0;font-size:12px;}
+  .column-strip .slot-target{
+    width:100%;height:32px;border:1.5px dashed rgba(201,161,59,0.4);border-radius:6px;
+    display:flex;align-items:center;justify-content:center;color:rgba(201,161,59,0.6);font-size:11px;
+  }
+  .column-strip .slot-target.playable{cursor:pointer;border-color:var(--gold);color:var(--gold);background:rgba(201,161,59,0.08);}
+  .column-strip .slot-target.playable:hover{background:rgba(201,161,59,0.18);}
+  .side-caption{font-family:Georgia,serif;font-size:11px;color:var(--muted);text-align:center;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:3px;}
+
+  .action-bar{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:10px;}
+  button{font-family:inherit;font-size:14px;border-radius:8px;border:1px solid rgba(201,161,59,0.4);
+    padding:9px 16px;background:rgba(255,255,255,0.06);color:var(--card-face);cursor:pointer;}
+  button.primary{background:var(--gold);color:var(--ink);font-weight:700;border:none;}
+  button.danger{background:var(--danger);color:#fff;border:none;}
+  button:disabled{opacity:0.35;cursor:not-allowed;}
+  select{font-family:inherit;font-size:13px;border-radius:8px;border:1px solid rgba(201,161,59,0.4);
+    padding:7px 10px;background:rgba(255,255,255,0.06);color:var(--card-face);}
+
+  .hint{text-align:center;color:var(--muted);font-size:13px;min-height:18px;margin-top:6px;}
+  .hint.active{color:var(--gold);}
+
+  .setup{text-align:center;}
+  .setup .row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:14px 0;}
+  .setup label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:5px;}
+
+  .final-score{text-align:center;font-family:Georgia,serif;font-size:32px;margin:6px 0 4px;}
+  .final-score .you{color:#8fd3a4;} .final-score .bot{color:var(--gold);}
+  .result-line{text-align:center;color:var(--muted);font-size:14px;margin-bottom:10px;}
+  .col-breakdown{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+  .col-row{display:flex;align-items:center;gap:10px;font-size:13px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,0.15);}
+  .col-row .label{width:80px;color:var(--muted);}
+  .col-row .winner{margin-left:auto;font-weight:700;}
+  .col-row .winner.you{color:#8fd3a4;} .col-row .winner.bot{color:var(--gold);} .col-row .winner.tie{color:var(--muted);}
+
+  .log{max-height:120px;overflow-y:auto;font-size:12px;color:var(--muted);line-height:1.6;}
+  .log div:last-child{color:var(--card-face);}
+
+  footer{text-align:center;color:var(--muted);font-size:11px;margin-top:20px;opacity:0.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Play vs the Bot</h1>
+  <p class="subtitle">Draw-then-play rules &middot; you draw automatically at the start of your turn</p>
+
+  <div class="panel setup" id="setupPanel">
+    <div style="font-family:Georgia,serif;color:var(--gold);letter-spacing:1px;">New Game</div>
+    <div class="row">
+      <label>Bot thinking time / move
+        <select id="setupBudget">
+          <option value="2000">2s (fast)</option>
+          <option value="4000" selected>4s (balanced)</option>
+          <option value="8000">8s (strong)</option>
+          <option value="15000">15s (very strong)</option>
+        </select>
+      </label>
+      <label>Who goes first
+        <select id="setupFirst">
+          <option value="you" selected>You</option>
+          <option value="bot">Bot</option>
+        </select>
+      </label>
+    </div>
+    <button class="primary" id="startBtn">Deal cards &amp; start</button>
+  </div>
+
+  <div id="gameArea" style="display:none;">
+    <div class="panel">
+      <div class="statusbar">
+        <span id="turnPill" class="turn-pill you">Your turn</span>
+        <span>Deck: <b id="deckCount">42</b></span>
+        <span>Your burn: <b id="yourBurnStatus">available</b></span>
+        <span>Bot burn: <b id="botBurnStatus">available</b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="side-caption">Bot</div>
+      <div class="table-columns" id="tableColumnsGrid"></div>
+      <div class="side-caption" style="margin-top:4px;">You</div>
+    </div>
+
+    <div class="panel" id="botHandPanel" style="display:none;">
+      <div class="side-caption">Bot's hand (revealed)</div>
+      <div class="hand-row" id="botHandRow"></div>
+    </div>
+
+    <div class="panel">
+      <div class="side-caption">Your hand</div>
+      <div class="hand-row" id="handRow"></div>
+      <div class="action-bar">
+        <button class="danger" id="burnBtn" disabled>Burn selected card</button>
+        <button class="primary" id="forceMoveBtn" style="display:none;">Force bot move</button>
+      </div>
+      <div class="hint" id="hint">Select a card, then tap an open column to play it.</div>
+    </div>
+
+    <div class="panel">
+      <div class="side-caption">Log</div>
+      <div class="log" id="logBox"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="endPanel" style="display:none;">
+    <div class="final-score" id="finalScore"></div>
+    <div class="result-line" id="resultLine"></div>
+    <div class="col-breakdown" id="colBreakdown"></div>
+    <div class="action-bar">
+      <button class="primary" id="playAgainBtn">Play again</button>
+    </div>
+  </div>
+
+  <footer>Runs the same ISMCTS/PIMC search engine as the board solver, entirely in your browser.</footer>
+</div>
+
+<script>
+// =========================================================================
+function handRank(cards) {
+  const ranks = cards.map(c => c.r).sort((a,b)=>b-a);
+  const suits = cards.map(c => c.s);
+  const n = cards.length;
+  const rankCounts = {};
+  for (const r of ranks) rankCounts[r] = (rankCounts[r]||0)+1;
+  const counts = Object.entries(rankCounts).map(([r,c])=>[+r,c]).sort((a,b)=> b[1]-a[1] || b[0]-a[0]);
+  const isFlush = n===5 && new Set(suits).size===1;
+  const uniq = [...new Set(ranks)].sort((a,b)=>b-a);
+  let isStraight=false, straightHigh=null;
+  if (n===5 && uniq.length===5) {
+    if (uniq[0]-uniq[4]===4) { isStraight=true; straightHigh=uniq[0]; }
+    else if (uniq.join(',')==='14,5,4,3,2') { isStraight=true; straightHigh=5; }
+  }
+  if (n<5) {
+    let cat=0;
+    if (counts[0][1]===4) cat=7;
+    else if (counts[0][1]===3) cat=3;
+    else if (counts[0][1]===2 && counts.length>1 && counts[1][1]===2) cat=2;
+    else if (counts[0][1]===2) cat=1;
+    return [cat, counts.map(c=>c[0]).concat(ranks)];
+  }
+  if (isStraight && isFlush) return [8, [straightHigh]];
+  if (counts[0][1]===4) { const kicker = Math.max(...ranks.filter(r=>r!==counts[0][0])); return [7, [counts[0][0], kicker]]; }
+  if (counts[0][1]===3 && counts[1][1]===2) return [6, [counts[0][0], counts[1][0]]];
+  if (isFlush) return [5, ranks];
+  if (isStraight) return [4, [straightHigh]];
+  if (counts[0][1]===3) { const kickers = ranks.filter(r=>r!==counts[0][0]).sort((a,b)=>b-a); return [3, [counts[0][0], ...kickers]]; }
+  if (counts[0][1]===2 && counts[1][1]===2) {
+    const pairRanks = [counts[0][0], counts[1][0]].sort((a,b)=>b-a);
+    const kicker = Math.max(...ranks.filter(r=>!pairRanks.includes(r)));
+    return [2, [...pairRanks, kicker]];
+  }
+  if (counts[0][1]===2) { const kickers = ranks.filter(r=>r!==counts[0][0]).sort((a,b)=>b-a); return [1, [counts[0][0], ...kickers]]; }
+  return [0, ranks];
+}
+function cmpRank(a,b){
+  const [ca,ta]=a, [cb,tb]=b;
+  if (ca!==cb) return ca-cb;
+  const len=Math.max(ta.length,tb.length);
+  for (let i=0;i<len;i++){ const x=ta[i]??-1, y=tb[i]??-1; if (x!==y) return x-y; }
+  return 0;
+}
+function makeDeck(){ const d=[]; for (let r=2;r<=14;r++) for (let s=0;s<4;s++) d.push({r,s}); return d; }
+const _FULL_DECK = makeDeck();  // precomputed once
+function partialStrength(cards){
+  // fast category-only (0-7), no full hand_rank needed for this heuristic signal
+  if (!cards.length) return -1;
+  const counts = {};
+  for (const c of cards) counts[c.r] = (counts[c.r]||0)+1;
+  const vals = Object.values(counts).sort((a,b)=>b-a);
+  if (vals[0]===4) return 7;
+  if (vals[0]===3) return 3;
+  if (vals[0]===2 && vals.length>1 && vals[1]===2) return 2;
+  if (vals[0]===2) return 1;
+  return 0;
+}
+function fitScore(card, slotCards, rankW=12, suitW=1, straightW=0.0, highW=0.05, junkPenaltyW=1.5){
+  if (slotCards.length>=5) return -999;
+  const ranksIn = slotCards.map(c=>c.r), suitsIn = slotCards.map(c=>c.s);
+  const rc={}, sc={};
+  for (const r of ranksIn) rc[r]=(rc[r]||0)+1;
+  for (const s of suitsIn) sc[s]=(sc[s]||0)+1;
+  const rankMatches = rc[card.r]||0;
+  let score = rankMatches*rankW + (sc[card.s]||0)*suitW;
+  if (slotCards.length){ const mind = Math.min(...ranksIn.map(x=>Math.abs(card.r-x))); if (mind<=4) score += Math.max(0,5-mind)*straightW; }
+  score += card.r*highW;
+  if (slotCards.length && rankMatches===0){
+    const colHasPair = Object.values(rc).some(v=>v>=2);
+    if (!colHasPair) score -= slotCards.length*junkPenaltyW;
+  }
+  return score;
+}
+function ck(c){ return c.r+'-'+c.s; }
+function heuristicAction(hand, ownTable, oppTableS, burned){
+  const openSlots=[0,1,2,3].filter(i=>ownTable[i].length<5);
+  if (!openSlots.length) return burned ? null : {type:'burn', card:hand[0]};
+  const playsMade = ownTable.reduce((a,s)=>a+s.length,0);
+  const empties = [0,1,2,3].filter(i=>ownTable[i].length===0);
+  if (playsMade<4 && empties.length){
+    // Validated refinement #1: if the hand already contains a known PAIR,
+    // play one card of that rank now instead of the globally-lowest card.
+    // Validated refinement #2: TRIPS (or better) already in hand should be
+    // HELD, not rushed out during the opening -- tested head-to-head on
+    // identical deals: immediate deployment won 41.2%, holding until
+    // opponent weakness is visible won 55.2%.
+    const rankCounts = {};
+    for (const c of hand) rankCounts[c.r] = (rankCounts[c.r]||0) + 1;
+    const tripRanks = Object.keys(rankCounts).map(Number).filter(r=>rankCounts[r]>=3);
+    const pairedRanks = Object.keys(rankCounts).map(Number).filter(r=>rankCounts[r]===2).sort((a,b)=>b-a);
+    const nonTripHand = hand.filter(c=>!tripRanks.includes(c.r));
+    let c;
+    if (tripRanks.length && nonTripHand.length){
+      c = nonTripHand.reduce((m,c)=> c.r<m.r?c:m);
+    } else if (pairedRanks.length){
+      c = hand.find(card=>card.r===pairedRanks[0]);
+    } else {
+      c = hand.reduce((m,c)=> c.r<m.r?c:m);
+    }
+    return {type:'play', card:c, slot:empties[0]};
+  }
+  // opponent's partial strength per slot only depends on the slot, not on
+  // which of our hand cards we're scoring -- compute it once, not once
+  // per (card, slot) pair.
+  const weakBonusBySlot = {};
+  for (const i of openSlots) weakBonusBySlot[i] = -partialStrength(oppTableS[i])*3;
+  const best={};
+  for (const c of hand){
+    let scored = openSlots.map(i=> [fitScore(c, ownTable[i]) + weakBonusBySlot[i], i]);
+    scored.sort((a,b)=>b[0]-a[0]);
+    best[ck(c)] = scored[0];
+  }
+  let bestCard = hand[0], bestVal=-Infinity;
+  for (const c of hand){ const [v]=best[ck(c)]; if (v>bestVal){bestVal=v;bestCard=c;} }
+  let worstCard = hand[0], worstVal=Infinity;
+  for (const c of hand){ const [v]=best[ck(c)]; if (v<worstVal){worstVal=v;worstCard=c;} }
+  const [val] = best[ck(bestCard)];
+  const [wval] = best[ck(worstCard)];
+  const [,slot] = best[ck(bestCard)];
+  if (!burned && wval<1.5 && val<1.5) return {type:'burn', card:worstCard};
+  return {type:'play', card:bestCard, slot};
+}
+function legalActions(state){
+  const p = state.toMove;
+  const hand = state.hands[p];
+  const openSlots = [0,1,2,3].filter(i=>state.tables[p][i].length<5);
+  const actions=[];
+  for (const c of hand) for (const s of openSlots) actions.push({type:'play', card:c, slot:s});
+  if (!state.burned[p]) for (const c of hand) actions.push({type:'burn', card:c});
+  return actions;
+}
+function actionKey(a){ return a.type==='burn' ? `burn:${ck(a.card)}` : `play:${ck(a.card)}:${a.slot}`; }
+function stepState(state, action){
+  // Current mover's hand was already at 6 (they drew before deciding).
+  // Structural sharing: only the cards/column that actually changed get
+  // new arrays -- everything untouched (the other player's whole table,
+  // the 3 unaffected columns) keeps the SAME array reference, and the
+  // deck is never copied at all (a fixed array + an advancing index).
+  const p = state.toMove;
+  const q = 1-p;
+  let hands = state.hands.slice();
+  let tables = state.tables;
+  let burned = state.burned;
+  if (action.type==='burn'){
+    hands[p] = state.hands[p].filter(c => !(c.r===action.card.r && c.s===action.card.s));
+    burned = p===0 ? [true, burned[1]] : [burned[0], true];
+  } else {
+    hands[p] = state.hands[p].filter(c => !(c.r===action.card.r && c.s===action.card.s));
+    const cols = state.tables[p].slice();
+    cols[action.slot] = [...state.tables[p][action.slot], action.card];
+    tables = p===0 ? [cols, state.tables[1]] : [state.tables[0], cols];
+  }
+  let done, deckPos, toMove=q;
+  if (state.deckPos < state.deckCards.length){
+    hands[q] = [...state.hands[q], state.deckCards[state.deckPos]];
+    deckPos = state.deckPos + 1;
+    done = false;
+  } else {
+    hands[q] = state.hands[q];
+    deckPos = state.deckPos;
+    done = true;
+  }
+  return { hands, tables, burned, deckCards: state.deckCards, deckPos, toMove, done };
+}
+function isTerminal(state){
+  // A state is terminal once the deck says so, OR (defensive) the current
+  // mover genuinely has no legal action available -- which should only
+  // ever coincide with the deck-exhausted case in a well-formed game, but
+  // treating it as terminal directly (rather than trusting the deck flag
+  // alone) means a stuck state can never be mistaken for a live one.
+  if (state.done) return true;
+  return legalActions(state).length === 0;
+}
+function evaluateTerminal(state, rootPlayer){
+  let wins=[0,0];
+  for (let i=0;i<4;i++){
+    const c = cmpRank(handRank(state.tables[0][i]), handRank(state.tables[1][i]));
+    if (c>0) wins[0]++; else if (c<0) wins[1]++;
+  }
+  const c = cmpRank(handRank(state.hands[0]), handRank(state.hands[1]));
+  if (c>0) wins[0]++; else if (c<0) wins[1]++;
+  let result = wins[0]>=3 ? 1 : (wins[1]>=3 ? -1 : 0);
+  return rootPlayer===0 ? result : -result;
+}
+function rollout(state){
+  let s = state;
+  while (!isTerminal(s)){
+    const p = s.toMove;
+    const a = heuristicAction(s.hands[p], s.tables[p], s.tables[1-p], s.burned[p]);
+    s = stepState(s, a);
+  }
+  return s;
+}
+function shuffle(arr, rng){ for (let i=arr.length-1;i>0;i--){ const j = Math.floor(rng()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+function makeRng(seed){ let x = seed || 123456789; return function(){ x ^= x<<13; x^=x>>>17; x^=x<<5; x|=0; return ((x>>>0) / 4294967296); }; }
+function determinize(rootHandS, rootTableS, oppTableS, rootBurnedS, rootBurnCard, oppBurnedS, rng){
+  const knownKeys = new Set();
+  for (const c of rootHandS) knownKeys.add(ck(c));
+  for (const col of rootTableS) for (const c of col) knownKeys.add(ck(c));
+  for (const col of oppTableS) for (const c of col) knownKeys.add(ck(c));
+  if (rootBurnedS && rootBurnCard) knownKeys.add(ck(rootBurnCard));
+  let unseen = _FULL_DECK.filter(c=>!knownKeys.has(ck(c)));
+  shuffle(unseen, rng);
+  let idx=0;
+  const oppHand = unseen.slice(idx, idx+5); idx+=5;
+  if (oppBurnedS) idx+=1;
+  const deckCards = unseen.slice(idx);
+  return {
+    hands: [rootHandS.map(c=>({...c})), oppHand],
+    tables: [rootTableS.map(col=>col.map(c=>({...c}))), oppTableS.map(col=>col.map(c=>({...c})))],
+    burned: [rootBurnedS, oppBurnedS],
+    deckCards, deckPos: 0, toMove: 0, done: false,
+  };
+}
+function fitScoreHandAware(card, slotCards, handOtherCards, rankW=12, suitW=1, straightW=0.0, highW=0.05, handSynergyW=2, junkPenaltyW=1.5){
+  if (slotCards.length>=5) return -999;
+  const rankMatches = slotCards.filter(c=>c.r===card.r).length;
+  const handMatches = handOtherCards.filter(c=>c.r===card.r).length;
+  if (slotCards.length===0){
+    return card.r*highW + handMatches*handSynergyW;
+  }
+  const suitMatches = slotCards.filter(c=>c.s===card.s).length;
+  const mind = Math.min(...slotCards.map(c=>Math.abs(card.r-c.r)));
+  let score = rankMatches*rankW + suitMatches*suitW + handMatches*handSynergyW;
+  if (mind<=4) score += Math.max(0,5-mind)*straightW;
+  score += card.r*highW;
+  if (rankMatches===0){
+    const colCounts = {};
+    for (const c of slotCards) colCounts[c.r] = (colCounts[c.r]||0)+1;
+    const colHasPair = Object.values(colCounts).some(v=>v>=2);
+    if (!colHasPair) score -= slotCards.length*junkPenaltyW;
+  }
+  return score;
+}
+function actionPriority(action, hand, ownTable, oppTableS){
+  // Same progressive-bias idea as the Python solver: order untried actions
+  // so the tree expands (and therefore searches deeper on) the moves the
+  // heuristic already thinks are promising, instead of a random order.
+  // Uses fitScoreHandAware (not plain fitScore, which heuristicAction/
+  // rollout still uses) -- validated as a safe integration point: every
+  // action still gets tried eventually here regardless of initial order,
+  // unlike rollout where the same hand-aware change was tested and found
+  // to regress full search-level play.
+  if (action.type==='burn'){
+    const c = action.card;
+    const handOther = hand.filter(h => !(h.r===c.r && h.s===c.s));
+    let bestFit = 0, any=false;
+    for (let i=0;i<4;i++){ if (ownTable[i].length<5){ const f=fitScoreHandAware(c, ownTable[i], handOther); if (!any || f>bestFit){bestFit=f; any=true;} } }
+    return -bestFit;
+  }
+  const handOther = hand.filter(h => !(h.r===action.card.r && h.s===action.card.s));
+  const base = fitScoreHandAware(action.card, ownTable[action.slot], handOther);
+  const weakBonus = -partialStrength(oppTableS[action.slot]) * 3;
+  return base + weakBonus;
+}
+function newNode(state, parent, action){
+  const untried = isTerminal(state) ? [] : legalActions(state);
+  const p = state.toMove;
+  untried.sort((a,b)=> actionPriority(a, state.hands[p], state.tables[p], state.tables[1-p])
+                       - actionPriority(b, state.hands[p], state.tables[p], state.tables[1-p]));
+  return { state, parent, action, children: [], untried, visits:0, value:0, player: state.toMove };
+}
+function uctSelect(node, rootPlayer, c=1.4){
+  let best=null, bestScore=-Infinity;
+  for (const ch of node.children){
+    if (ch.visits===0) return ch;
+    let q = ch.value/ch.visits;
+    q = (node.player===rootPlayer) ? q : -q;
+    const score = q + c*Math.sqrt(Math.log(node.visits)/ch.visits);
+    if (score>bestScore){ bestScore=score; best=ch; }
+  }
+  return best;
+}
+function mctsSearch(rootState, rootPlayer, iterations, rng){
+  const root = newNode(rootState, null, null);
+  for (let it=0; it<iterations; it++){
+    let node = root;
+    while (node.untried.length===0 && node.children.length>0 && !isTerminal(node.state)){
+      node = uctSelect(node, rootPlayer);
+    }
+    if (node.untried.length>0 && !isTerminal(node.state)){
+      const a = node.untried.pop();  // highest-priority untried action (sorted ascending, pop takes the last)
+      const child = newNode(stepState(node.state, a), node, a);
+      node.children.push(child);
+      node = child;
+    }
+    const terminalState = isTerminal(node.state) ? node.state : rollout(node.state);
+    const result = evaluateTerminal(terminalState, rootPlayer);
+    let n = node;
+    while (n){ n.visits++; n.value += result; n = n.parent; }
+  }
+  const stats = new Map();
+  for (const ch of root.children) stats.set(actionKey(ch.action), [ch.visits, ch.value, ch.action]);
+  return stats;
+}
+async function solveBoard(rootHandS, rootTableS, oppTableS, rootBurnedS, rootBurnCard, oppBurnedS, timeBudgetMs, itersPerDet, onProgress){
+  const rng = makeRng(Date.now() % 2147483647);
+  const actionStats = new Map();
+  const start = Date.now();
+  let dets=0;
+  while (Date.now()-start < timeBudgetMs){
+    const det = determinize(rootHandS, rootTableS, oppTableS, rootBurnedS, rootBurnCard, oppBurnedS, rng);
+    const stats = mctsSearch(det, 0, itersPerDet, rng);
+    for (const [key,[v,val,action]] of stats){
+      if (!actionStats.has(key)) actionStats.set(key, [0,0,action]);
+      const e = actionStats.get(key);
+      e[0]+=v; e[1]+=val;
+    }
+    dets++;
+    if (onProgress) onProgress(dets, Date.now()-start);
+    await new Promise(r=>setTimeout(r,0)); // yield to keep the UI responsive
+  }
+  const ranked = [...actionStats.entries()].map(([key,[v,val,action]])=>{
+    const winRate = v>0 ? (val/v+1)/2 : 0.5;
+    return {action, winRate, visits:v};
+  });
+  ranked.sort((a,b)=>b.winRate-a.winRate);
+  return {ranked, dets, elapsed: Date.now()-start};
+}
+
+// =========================================================================
+
+// LIVE GAME LOOP -- YOU (player 0) vs BOT (player 1)
+// =========================================================================
+const SUITS = ['s','h','d','c'];
+const SUIT_SYMBOL = {s:'\u2660', h:'\u2665', d:'\u2666', c:'\u2663'};
+const RED_SUITS = new Set(['h','d']);
+const RANK_LABEL = r => ({11:'J',12:'Q',13:'K',14:'A'}[r] || String(r));
+
+let game = null;
+let selectedCard = null;
+let botThinking = false;
+
+function newDeal(youFirst){
+  const deck = makeDeck();
+  for (let i=deck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [deck[i],deck[j]]=[deck[j],deck[i]]; }
+  const hand0 = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+  const hand1 = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+  const emptyTables = [[[],[],[],[]], [[],[],[],[]]];
+  let state = { hands:[hand0, hand1], tables:emptyTables, burned:[false,false], burnCards:[null,null],
+                deckCards: deck, deckPos:0, toMove: youFirst?0:1, done:false };
+  state.hands[state.toMove] = [...state.hands[state.toMove], state.deckCards[state.deckPos]];
+  state.deckPos += 1;
+  return state;
+}
+
+function log(msg){
+  game.log.push(msg);
+  const box = document.getElementById('logBox');
+  box.innerHTML = game.log.map(m=>`<div>${m}</div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function render(){
+  const state = game.state;
+  const you = 0, bot = 1;
+
+  document.getElementById('deckCount').textContent = state.deckCards.length - state.deckPos;
+  document.getElementById('yourBurnStatus').textContent = state.burned[you] ? 'used' : 'available';
+  document.getElementById('botBurnStatus').textContent = state.burned[bot] ? 'used' : 'available';
+  const pill = document.getElementById('turnPill');
+  if (game.over){
+    pill.textContent = 'Game over'; pill.className = 'turn-pill over';
+  } else if (botThinking){
+    pill.textContent = 'Bot is thinking...'; pill.className = 'turn-pill bot';
+  } else if (state.toMove === you){
+    pill.textContent = 'Your turn'; pill.className = 'turn-pill you';
+  } else {
+    pill.textContent = "Bot's turn"; pill.className = 'turn-pill bot';
+  }
+
+  const grid = document.getElementById('tableColumnsGrid');
+  grid.innerHTML = '';
+  for (let i=0;i<4;i++){
+    const strip = document.createElement('div');
+    strip.className = 'column-strip';
+
+    const botHalf = document.createElement('div');
+    botHalf.className = 'strip-half bot';
+    state.tables[bot][i].forEach(c => botHalf.appendChild(makeCardEl(c)));
+
+    const divider = document.createElement('div');
+    divider.className = 'strip-divider';
+    divider.innerHTML = `<span class="col-num">Col ${i+1}</span><span class="strip-count">${state.tables[bot][i].length}v${state.tables[you][i].length}</span>`;
+
+    const youHalf = document.createElement('div');
+    youHalf.className = 'strip-half you';
+    const canPlayHere = !game.over && !botThinking && state.toMove===you && selectedCard!==null && state.tables[you][i].length<5;
+    if (canPlayHere){
+      const slot = document.createElement('div');
+      slot.className = 'slot-target playable';
+      slot.textContent = 'Play here';
+      slot.onclick = () => playSelectedCard(i);
+      youHalf.appendChild(slot);
+    }
+    for (let j=state.tables[you][i].length-1;j>=0;j--){
+      youHalf.appendChild(makeCardEl(state.tables[you][i][j]));
+    }
+
+    strip.appendChild(botHalf);
+    strip.appendChild(divider);
+    strip.appendChild(youHalf);
+    grid.appendChild(strip);
+  }
+
+  const botHandPanel = document.getElementById('botHandPanel');
+  const botHandRow = document.getElementById('botHandRow');
+  if (game.over){
+    botHandPanel.style.display = 'block';
+    botHandRow.innerHTML = '';
+    state.hands[bot].forEach((c) => botHandRow.appendChild(makeCardEl(c)));
+  } else {
+    botHandPanel.style.display = 'none';
+  }
+
+  const handRow = document.getElementById('handRow');
+  handRow.innerHTML = '';
+  const yourTurnIdle = !game.over && !botThinking && state.toMove===you;
+  state.hands[you].forEach((c) => {
+    const div = makeCardEl(c);
+    if (yourTurnIdle) div.classList.add('selectable');
+    if (selectedCard && selectedCard.r===c.r && selectedCard.s===c.s) div.classList.add('selected');
+    if (yourTurnIdle){
+      div.onclick = () => { selectedCard = (selectedCard && selectedCard.r===c.r && selectedCard.s===c.s) ? null : c; render(); };
+    }
+    handRow.appendChild(div);
+  });
+
+  const burnBtn = document.getElementById('burnBtn');
+  burnBtn.disabled = !(yourTurnIdle && selectedCard && !state.burned[you]);
+  burnBtn.onclick = burnSelectedCard;
+
+  const hint = document.getElementById('hint');
+  if (game.over){
+    hint.textContent = '';
+  } else if (botThinking){
+    hint.textContent = game.thinkingStatus || 'Bot is thinking...';
+    hint.className = 'hint active';
+  } else if (state.toMove !== you){
+    hint.textContent = "Waiting for the bot...";
+    hint.className = 'hint';
+  } else if (!selectedCard){
+    hint.textContent = 'Select a card from your hand, then tap an open column to play it (or burn it).';
+    hint.className = 'hint';
+  } else {
+    hint.textContent = `${RANK_LABEL(selectedCard.r)}${SUIT_SYMBOL[SUITS[selectedCard.s]]} selected -- tap a column to play it, or burn it.`;
+    hint.className = 'hint active';
+  }
+}
+
+function makeCardEl(c){
+  const div = document.createElement('div');
+  const red = RED_SUITS.has(SUITS[c.s]);
+  div.className = 'card' + (red?' red':'');
+  div.innerHTML = `<div>${RANK_LABEL(c.r)}</div><div class="suit">${SUIT_SYMBOL[SUITS[c.s]]}</div>`;
+  return div;
+}
+
+function removeFromHand(hand, c){
+  const idx = hand.findIndex(x=>x.r===c.r && x.s===c.s);
+  hand.splice(idx,1);
+}
+
+function advanceAfterAction(mover){
+  const state = game.state;
+  const next = 1 - mover;
+  state.toMove = next;
+  if (state.deckPos < state.deckCards.length){
+    state.hands[next] = [...state.hands[next], state.deckCards[state.deckPos]];
+    state.deckPos += 1;
+    state.done = false;
+  } else {
+    state.done = true;
+  }
+}
+
+async function playSelectedCard(colIndex){
+  if (!selectedCard) return;
+  const state = game.state;
+  const c = selectedCard;
+  removeFromHand(state.hands[0], c);
+  state.tables[0][colIndex] = [...state.tables[0][colIndex], c];
+  log(`You played ${RANK_LABEL(c.r)}${SUIT_SYMBOL[SUITS[c.s]]} \u2192 Column ${colIndex+1}`);
+  selectedCard = null;
+  advanceAfterAction(0);
+  await afterMove();
+}
+
+async function burnSelectedCard(){
+  if (!selectedCard || game.state.burned[0]) return;
+  const state = game.state;
+  const c = selectedCard;
+  removeFromHand(state.hands[0], c);
+  state.burned[0] = true;
+  state.burnCards[0] = c;
+  log(`You burned ${RANK_LABEL(c.r)}${SUIT_SYMBOL[SUITS[c.s]]}`);
+  selectedCard = null;
+  advanceAfterAction(0);
+  await afterMove();
+}
+
+async function afterMove(){
+  render();
+  if (game.state.done){ finishGame(); return; }
+  if (game.state.toMove === 1){
+    await botMove();
+  }
+}
+
+async function botMove(){
+  botThinking = true;
+  game.thinkingStatus = 'Bot is thinking...';
+  render();
+  await new Promise(r=>setTimeout(r,30));
+  const state = game.state;
+  try {
+    const botHand = state.hands[1];
+    const botTable = state.tables[1];
+    const yourTable = state.tables[0];
+    const onProgress = (dets, ms) => {
+      game.thinkingStatus = `Bot is thinking... ${dets} scenarios explored (${(ms/1000).toFixed(1)}s)`;
+      render();
+    };
+    const {ranked} = await solveBoard(botHand, botTable, yourTable, state.burned[1], state.burnCards[1], state.burned[0],
+                                        game.botBudget, 100, onProgress);
+    // Defensive fallback: the search should always return at least one
+    // candidate, but if it somehow doesn't, fall back to the fast
+    // heuristic rather than crash with nothing to show for it.
+    const action = (ranked && ranked.length > 0) ? ranked[0].action
+                    : heuristicAction(botHand, botTable, yourTable, state.burned[1]);
+    if (action.type === 'burn'){
+      removeFromHand(state.hands[1], action.card);
+      state.burned[1] = true;
+      state.burnCards[1] = action.card;
+      log(`Bot burned a card`);
+    } else {
+      removeFromHand(state.hands[1], action.card);
+      state.tables[1][action.slot] = [...state.tables[1][action.slot], action.card];
+      log(`Bot played ${RANK_LABEL(action.card.r)}${SUIT_SYMBOL[SUITS[action.card.s]]} \u2192 Column ${action.slot+1}`);
+    }
+    botThinking = false;
+    advanceAfterAction(1);
+    render();
+    if (state.done){ finishGame(); return; }
+    // advanceAfterAction(1) always flips toMove to 0 -- a further bot turn here
+    // would only ever indicate a sequencing bug elsewhere, so this deliberately
+    // does NOT retry-as-bot; afterMove()/the render loop owns what happens next.
+  } catch (err) {
+    botThinking = false;
+    game.thinkingStatus = '';
+    console.error('Bot move failed:', err);
+    log(`\u26a0\ufe0f Bot hit an error and could not move: ${err.message}. Tap "Force bot move" to continue with a quick fallback move.`);
+    document.getElementById('forceMoveBtn').style.display = 'inline-block';
+    render();
+  }
+}
+
+function finishGame(){
+  game.over = true;
+  const state = game.state;
+  document.getElementById('endPanel').style.display = 'block';
+  let wins = [0,0];
+  const rows = [];
+  for (let i=0;i<4;i++){
+    const ra = handRank(state.tables[0][i]), rb = handRank(state.tables[1][i]);
+    const c = cmpRank(ra, rb);
+    let w = 'tie';
+    if (c>0){ wins[0]++; w='you'; } else if (c<0){ wins[1]++; w='bot'; }
+    rows.push({label:`Column ${i+1}`, w});
+  }
+  const ra = handRank(state.hands[0]), rb = handRank(state.hands[1]);
+  const c = cmpRank(ra, rb);
+  let w5 = 'tie';
+  if (c>0){ wins[0]++; w5='you'; } else if (c<0){ wins[1]++; w5='bot'; }
+  rows.push({label:'Hidden hand', w:w5});
+
+  document.getElementById('finalScore').innerHTML = `<span class="you">${wins[0]}</span> \u2013 <span class="bot">${wins[1]}</span>`;
+  let result;
+  if (wins[0] >= 3) result = 'You win the game!';
+  else if (wins[1] >= 3) result = 'The bot wins this game.';
+  else result = 'Nobody reached 3 -- no majority winner.';
+  document.getElementById('resultLine').textContent = result;
+
+  const bd = document.getElementById('colBreakdown');
+  bd.innerHTML = rows.map(r=>`<div class="col-row"><span class="label">${r.label}</span><span class="winner ${r.w}">${r.w==='tie'?'Tie':(r.w==='you'?'You':'Bot')}</span></div>`).join('');
+  render();
+}
+
+document.getElementById('startBtn').onclick = () => {
+  const budget = parseInt(document.getElementById('setupBudget').value, 10);
+  const youFirst = document.getElementById('setupFirst').value === 'you';
+  game = { state: newDeal(youFirst), log: [], botBudget: budget, over: false, thinkingStatus: '' };
+  selectedCard = null; botThinking = false;
+  document.getElementById('setupPanel').style.display = 'none';
+  document.getElementById('endPanel').style.display = 'none';
+  document.getElementById('gameArea').style.display = 'block';
+  document.getElementById('forceMoveBtn').style.display = 'none';
+  log(youFirst ? 'You go first.' : 'Bot goes first.');
+  render();
+  if (game.state.toMove === 1){ botMove(); }
+};
+document.getElementById('forceMoveBtn').onclick = () => {
+  document.getElementById('forceMoveBtn').style.display = 'none';
+  const state = game.state;
+  const action = heuristicAction(state.hands[1], state.tables[1], state.tables[0], state.burned[1]);
+  if (action.type === 'burn'){
+    removeFromHand(state.hands[1], action.card);
+    state.burned[1] = true;
+    state.burnCards[1] = action.card;
+    log(`Bot burned a card (forced fallback)`);
+  } else {
+    removeFromHand(state.hands[1], action.card);
+    state.tables[1][action.slot] = [...state.tables[1][action.slot], action.card];
+    log(`Bot played ${RANK_LABEL(action.card.r)}${SUIT_SYMBOL[SUITS[action.card.s]]} \u2192 Column ${action.slot+1} (forced fallback)`);
+  }
+  botThinking = false;
+  advanceAfterAction(1);
+  render();
+  if (state.done) finishGame();
+};
+document.getElementById('playAgainBtn').onclick = () => {
+  document.getElementById('endPanel').style.display = 'none';
+  document.getElementById('setupPanel').style.display = 'block';
+};
+</script>
+</body>
+</html>
