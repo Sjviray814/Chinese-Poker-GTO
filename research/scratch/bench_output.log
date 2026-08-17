@@ -1,0 +1,10 @@
+game  0: NEW 3 - 2 OLD   (BAABA)   [36s elapsed]
+game  1: NEW 2 - 3 OLD   (AABAB)   [73s elapsed]
+game  2: NEW 3 - 2 OLD   (BABAA)   [109s elapsed]
+game  3: NEW 2 - 3 OLD   (AABBA)   [145s elapsed]
+game  4: NEW 3 - 2 OLD   (ABBAA)   [180s elapsed]
+game  5: NEW 2 - 3 OLD   (ABBAA)   [216s elapsed]
+
+NEW (fast search) vs OLD (pre-optimization) record: 3-3-0 over 6 games
+Average column-margin for NEW: +0.00
+(both sides given the identical 0.8s per move)
