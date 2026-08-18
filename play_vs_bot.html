@@ -530,6 +530,42 @@ async function solveBoard(rootHandS, rootTableS, oppTableS, rootBurnedS, rootBur
     return {action, winRate, visits:v};
   });
   ranked.sort((a,b)=>b.winRate-a.winRate);
+
+  // Statistical-tie fallback -- see solver.py's solve() for the full
+  // rationale. Find the group of actions statistically tied with the
+  // top-ranked one (not just the top-2), and use heuristicAction to
+  // break the tie ONLY within that group -- never override a move
+  // search has confidently ranked as worse.
+  const significanceZ = 1.5;
+  const se = (wr, v) => v > 0 ? Math.sqrt(wr*(1-wr)/v) : 1.0;
+  if (ranked.length >= 2){
+    const seTop = se(ranked[0].winRate, ranked[0].visits);
+    const combinedSeTop2 = Math.sqrt(seTop**2 + se(ranked[1].winRate, ranked[1].visits)**2);
+    if ((ranked[0].winRate - ranked[1].winRate) < significanceZ * combinedSeTop2){
+      const tiedIndices = [];
+      for (let i=0; i<ranked.length; i++){
+        const combinedSeI = Math.sqrt(seTop**2 + se(ranked[i].winRate, ranked[i].visits)**2);
+        if ((ranked[0].winRate - ranked[i].winRate) < significanceZ * combinedSeI){
+          tiedIndices.push(i);
+        } else break; // ranked is sorted descending -- first non-tied entry ends the group
+      }
+      const heuristicChoice = heuristicAction(rootHandS, rootTableS, oppTableS, rootBurnedS);
+      const actionsEqual = (a,b) => {
+        if (a.type !== b.type) return false;
+        if (a.card.r !== b.card.r || a.card.s !== b.card.s) return false;
+        if (a.type === 'play' && a.slot !== b.slot) return false;
+        return true;
+      };
+      for (const i of tiedIndices){
+        if (actionsEqual(ranked[i].action, heuristicChoice)){
+          const [entry] = ranked.splice(i, 1);
+          ranked.unshift(entry);
+          break;
+        }
+      }
+    }
+  }
+
   return {ranked, dets, elapsed: Date.now()-start};
 }
 

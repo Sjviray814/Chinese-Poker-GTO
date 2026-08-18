@@ -843,7 +843,8 @@ def determinize(root_hand, root_table, opp_table, root_burned, root_burn_card, o
 # Top-level PIMC solver: anytime, time-budgeted
 # ----------------------------------------------------------------------
 def solve(root_hand, root_table, opp_table, root_burned, root_burn_card, opp_burned,
-          time_budget=8.0, iters_per_determinization=150, seed=None, verbose=False):
+          time_budget=8.0, iters_per_determinization=150, seed=None, verbose=False,
+          significance_z=1.5):
     # Opening phase (still seeding empty columns, plays_made<4): this is
     # governed by an extensively validated hard rule (play a pair
     # immediately if available, hold trips, otherwise spread into an
@@ -889,6 +890,55 @@ def solve(root_hand, root_table, opp_table, root_burned, root_burn_card, opp_bur
         ranked.append((a, win_rate, v))
     ranked.sort(key=lambda x: x[1], reverse=True)
     elapsed = time.time() - start
+
+    # Statistical-tie fallback: the opening-phase fix above handles the
+    # cleanest case (moves 1-4), but the SAME underlying problem --
+    # search's rollout-based win-rate estimates are noisy enough that the
+    # ranking among genuinely close options is not reliable -- applies
+    # anywhere two options are statistically indistinguishable, not just
+    # in the opening. Confirmed directly: a search top-2 with win rates
+    # 64.5%/64.0% on ~700 visits each has a combined standard error around
+    # 2.6 points -- the 0.5-point gap between them is pure noise, and
+    # trusting it as a real preference is exactly the mechanism that
+    # ranked burning above an objectively correct move.
+    #
+    # Generalized fix: find the full group of actions statistically tied
+    # with the top-ranked one (not just the top-2), and use
+    # heuristic_action to break the tie ONLY among that group. An earlier
+    # version of this fix blindly substituted heuristic_action's own
+    # preferred move whenever the top-2 were tied, even if that move
+    # wasn't part of the tied group at all -- caught directly: in one
+    # test, heuristic_action's pick had a confidently-measured 15.8% win
+    # rate (a 33-point gap from the top, nowhere near a tie), and the
+    # buggy version promoted it anyway, discarding solid search evidence
+    # in favor of a heuristic that search had already clearly overruled.
+    # The fix must only ever break ties WITHIN the statistically
+    # indistinguishable group -- never override a move search has
+    # confidently ranked as worse.
+    if len(ranked) >= 2:
+        def _se(win_rate, visits):
+            return math.sqrt(win_rate * (1 - win_rate) / visits) if visits > 0 else 1.0
+        top_action, top_wr, top_v = ranked[0]
+        se_top = _se(top_wr, top_v)
+        _, second_wr, second_v = ranked[1]
+        combined_se_top2 = math.sqrt(se_top ** 2 + _se(second_wr, second_v) ** 2)
+        if (top_wr - second_wr) < significance_z * combined_se_top2:
+            tied_indices = []
+            for i, (a, wr, v) in enumerate(ranked):
+                combined_se_i = math.sqrt(se_top ** 2 + _se(wr, v) ** 2)
+                if (top_wr - wr) < significance_z * combined_se_i:
+                    tied_indices.append(i)
+                else:
+                    break  # ranked is sorted descending -- first non-tied entry ends the group
+            heuristic_choice = heuristic_action(root_hand, root_table, opp_table, root_burned)
+            for i in tied_indices:
+                if ranked[i][0] == heuristic_choice:
+                    ranked.insert(0, ranked.pop(i))
+                    break
+            # if heuristic's choice isn't in the tied group, leave
+            # search's own ranking as-is -- it already distinguished that
+            # move as worse with real statistical confidence.
+
     return ranked, dets, elapsed
 
 SUIT_CHR = 'shdc'  # spades, hearts, diamonds, clubs -> arbitrary fixed labels
