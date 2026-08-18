@@ -536,7 +536,7 @@ async function solveBoard(rootHandS, rootTableS, oppTableS, rootBurnedS, rootBur
   // top-ranked one (not just the top-2), and use heuristicAction to
   // break the tie ONLY within that group -- never override a move
   // search has confidently ranked as worse.
-  const significanceZ = 1.5;
+  const significanceZ = 2.0;
   const se = (wr, v) => v > 0 ? Math.sqrt(wr*(1-wr)/v) : 1.0;
   if (ranked.length >= 2){
     const seTop = se(ranked[0].winRate, ranked[0].visits);
