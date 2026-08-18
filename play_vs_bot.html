@@ -173,6 +173,11 @@
     </div>
 
     <div class="panel">
+      <div class="side-caption">Bot's reasoning (this move)</div>
+      <div class="log" id="decisionLogBox" style="font-size:0.85em;"></div>
+    </div>
+
+    <div class="panel">
       <div class="side-caption">Log</div>
       <div class="log" id="logBox"></div>
     </div>
@@ -545,7 +550,36 @@ function log(msg){
   box.scrollTop = box.scrollHeight;
 }
 
+function fmtCard(c){ return `${RANK_LABEL(c.r)}${SUIT_SYMBOL[SUITS[c.s]]}`; }
+function fmtAction(a){
+  if (a.type === 'burn') return `Burn ${fmtCard(a.card)}`;
+  return `Play ${fmtCard(a.card)} \u2192 Col ${a.slot+1}`;
+}
+
+function renderDecisionLog(){
+  // Shows the search's actual top-3 considered options for the bot's
+  // MOST RECENT move -- not reconstructed after the fact, captured at
+  // the exact moment the real decision was made. Full history stays in
+  // game.decisionLog (every entry, not just the latest) for anyone who
+  // wants to review the whole game's reasoning, not just the last move.
+  const box = document.getElementById('decisionLogBox');
+  if (!box || !game.decisionLog || game.decisionLog.length === 0){
+    if (box) box.innerHTML = '<div style="opacity:0.6;">No bot decisions yet.</div>';
+    return;
+  }
+  const entry = game.decisionLog[game.decisionLog.length - 1];
+  let html = `<div>Turn ${entry.turn}${entry.usedFallback ? ' (search returned nothing -- used fast fallback)' : ''}:</div>`;
+  entry.top.forEach((r, i) => {
+    const chosen = (r.action.type===entry.chosen.type && r.action.card.r===entry.chosen.card.r
+                    && r.action.card.s===entry.chosen.card.s
+                    && (r.action.slot===entry.chosen.slot || r.action.type==='burn'));
+    html += `<div>${chosen?'\u2192 ':'&nbsp;&nbsp;'}${i+1}. ${fmtAction(r.action)} -- win rate ${(r.winRate*100).toFixed(1)}% (${r.visits} visits)</div>`;
+  });
+  box.innerHTML = html;
+}
+
 function render(){
+  renderDecisionLog();
   const state = game.state;
   const you = 0, bot = 1;
 
@@ -722,6 +756,21 @@ async function botMove(){
     // heuristic rather than crash with nothing to show for it.
     const action = (ranked && ranked.length > 0) ? ranked[0].action
                     : heuristicAction(botHand, botTable, yourTable, state.burned[1]);
+    // Structured decision log -- captures what the search actually saw
+    // and considered, not just the final chosen move, so a later
+    // "did the bot play well here" question can be answered from real
+    // data instead of reconstructing the board from a screenshot.
+    const turnNumber = game.decisionLog.length + 1;
+    game.decisionLog.push({
+      turn: turnNumber,
+      hand: botHand.map(c=>({r:c.r,s:c.s})),
+      ownTable: botTable.map(col=>col.map(c=>({r:c.r,s:c.s}))),
+      oppTable: yourTable.map(col=>col.map(c=>({r:c.r,s:c.s}))),
+      top: (ranked||[]).slice(0,3).map(r=>({action:r.action, winRate:r.winRate, visits:r.visits})),
+      chosen: action,
+      usedFallback: !(ranked && ranked.length > 0),
+    });
+    renderDecisionLog();
     if (action.type === 'burn'){
       removeFromHand(state.hands[1], action.card);
       state.burned[1] = true;
@@ -783,7 +832,7 @@ function finishGame(){
 document.getElementById('startBtn').onclick = () => {
   const budget = parseInt(document.getElementById('setupBudget').value, 10);
   const youFirst = document.getElementById('setupFirst').value === 'you';
-  game = { state: newDeal(youFirst), log: [], botBudget: budget, over: false, thinkingStatus: '' };
+  game = { state: newDeal(youFirst), log: [], decisionLog: [], botBudget: budget, over: false, thinkingStatus: '' };
   selectedCard = null; botThinking = false;
   document.getElementById('setupPanel').style.display = 'none';
   document.getElementById('endPanel').style.display = 'none';
