@@ -493,6 +493,22 @@ function mctsSearch(rootState, rootPlayer, iterations, rng){
   return stats;
 }
 async function solveBoard(rootHandS, rootTableS, oppTableS, rootBurnedS, rootBurnCard, oppBurnedS, timeBudgetMs, itersPerDet, onProgress){
+  // Opening phase: hard-enforced here, bypassing search entirely -- see
+  // solver.py's solve() docstring for the full rationale. Confirmed via
+  // a real user-reported screenshot and direct reproduction: with two
+  // columns still completely empty, full tree search ranked BURNING
+  // above playing into the empty column, even though the rollout policy
+  // alone (heuristicAction) correctly said to play there. Skipping
+  // search for this decision is both safer (no noisy ranking can
+  // override an already-validated correct move) and strictly faster.
+  const playsMade = rootTableS.reduce((a,s)=>a+s.length,0);
+  const empties = [0,1,2,3].filter(i=>rootTableS[i].length===0);
+  const openSlots = [0,1,2,3].filter(i=>rootTableS[i].length<5);
+  if (openSlots.length && playsMade < 4 && empties.length){
+    const openingAction = heuristicAction(rootHandS, rootTableS, oppTableS, rootBurnedS);
+    return { ranked: [{action: openingAction, winRate: 1.0, visits: 1}], dets: 0, elapsed: 0 };
+  }
+
   const rng = makeRng(Date.now() % 2147483647);
   const actionStats = new Map();
   const start = Date.now();

@@ -844,6 +844,31 @@ def determinize(root_hand, root_table, opp_table, root_burned, root_burn_card, o
 # ----------------------------------------------------------------------
 def solve(root_hand, root_table, opp_table, root_burned, root_burn_card, opp_burned,
           time_budget=8.0, iters_per_determinization=150, seed=None, verbose=False):
+    # Opening phase (still seeding empty columns, plays_made<4): this is
+    # governed by an extensively validated hard rule (play a pair
+    # immediately if available, hold trips, otherwise spread into an
+    # empty column) that heuristic_action already applies correctly
+    # inside rollout -- but that rule was NEVER enforced at this root
+    # decision, only deep inside simulated games. Confirmed as a real bug
+    # via a user-reported screenshot and direct reproduction: with two of
+    # the bot's own columns still completely empty, full tree search
+    # ranked BURNING above playing into the empty column (67.6% vs
+    # 65.3%), even though heuristic_action called directly on the exact
+    # same position correctly said to play into the empty column. The
+    # tree searches over ALL legal actions including burn, and its
+    # rollout-based value estimates are noisy enough this early (very
+    # tight margins, large standard errors relative to the visit counts
+    # -- see the session notes) to occasionally rank something else above
+    # a move that's already known, with high confidence, to be correct.
+    # Skipping search entirely for this decision is both safer (no noisy
+    # ranking can override a known-correct move) and strictly faster.
+    open_slots = [i for i in range(4) if len(root_table[i]) < 5]
+    plays_made = sum(len(s) for s in root_table)
+    empties = [i for i in range(4) if len(root_table[i]) == 0]
+    if open_slots and plays_made < 4 and empties:
+        opening_action = heuristic_action(root_hand, root_table, opp_table, root_burned)
+        return [(opening_action, 1.0, 1)], 0, 0.0
+
     rng = random.Random(seed)
     action_stats = collections.defaultdict(lambda: [0, 0.0])  # visits, value(root-perspective)
     start = time.time()
