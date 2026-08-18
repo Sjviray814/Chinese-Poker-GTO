@@ -504,6 +504,28 @@ work wraps up).
 
 ## 9. TODO — Near Term
 
+1. **Not fully resolved: search sometimes confidently prefers reinforcing
+   a column where the opponent already has an established pair, over
+   attacking a genuinely weak column.** Found via a systematic review of
+   20 real games' opening-window play (bot's first 8 decisions each,
+   played through the actual `solve()` pipeline, reviewed by hand).
+   Confirmed reproducible on a specific position; the rollout heuristic's
+   own scoring already rates the bad column clearly worst, but search's
+   aggregated estimate sometimes disagrees anyway, with what looks like
+   real confidence. A large independent simulation on that exact position
+   found the two candidate columns' TRUE win rates were statistically
+   identical (22.5% vs 22.7%) -- meaning search's own reported confidence
+   had UNDERSTATED its true uncertainty, not just failed to reach
+   significance. Raising `significance_z` from 1.5 to 2.0 (deployed)
+   catches this more often and tested clean at the MCTS level (5-5, no
+   regression) -- but repeated trials on the identical position still
+   show the pattern in SOME determinizations even at z=2.0, meaning this
+   isn't just sampling noise around a stable estimate; something more
+   systematic in how certain determinization/rollout combinations unfold
+   is still unexplained. Worth a deeper investigation specifically into
+   *why* some rollouts produce inflated confidence for reinforcing an
+   opponent's strong column, rather than continuing to just raise the
+   significance threshold as a blunter and blunter instrument.
 1. **Get real player feedback on the two shipped bug fixes.** Both the
    straight_w removal and the junk-penalty fix are validated at the MCTS
    level (8-2 each), but the *original* motivation for both was specific
