@@ -441,20 +441,7 @@ def heuristic_action(hand, own_table, opp_table, burned):
             c = next(card for card in hand if card[0] == paired_ranks[0])
         else:
             c = min(hand, key=lambda c: c[0])
-        # Prefer a column that ALREADY has a card of this same rank (build
-        # toward trips/quads) over starting a fresh empty column -- found
-        # via systematic opening playtesting: the pair-priority rule
-        # correctly identified a matching card in hand, but always sent
-        # it to the next fresh empty column regardless of whether an
-        # earlier opening turn had already placed a card of that same
-        # rank elsewhere. Confirmed as a common, not rare, pattern: 9
-        # scattered-rank instances across just 20 simulated openings, one
-        # of them scattering three separate cards of rank 4 into three
-        # different columns instead of stacking them.
-        matching_col = next((i for i in range(4) if len(own_table[i]) < 5
-                              and any(r == c[0] for r, s in own_table[i])), None)
-        target = matching_col if matching_col is not None else empties[0]
-        return ('play', c, target)
+        return ('play', c, empties[0])
     weak_bonus_by_slot = {i: -partial_strength(opp_table[i]) * 3 for i in open_slots}
     best = {}
     for c in hand:
@@ -551,12 +538,7 @@ def heuristic_action_winprob(hand, own_table, opp_table, burned):
             c = next(card for card in hand if card[0] == paired_ranks[0])
         else:
             c = min(hand, key=lambda c: c[0])
-        # Same fix as heuristic_action's opening branch: prefer a column
-        # that already has a matching-rank card over starting fresh.
-        matching_col = next((i for i in range(4) if len(own_table[i]) < 5
-                              and any(r == c[0] for r, s in own_table[i])), None)
-        target = matching_col if matching_col is not None else empties[0]
-        return ('play', c, target)
+        return ('play', c, empties[0])
 
     # General (post-opening) phase: score each candidate placement by its
     # MARGINAL contribution to that column's real win probability
